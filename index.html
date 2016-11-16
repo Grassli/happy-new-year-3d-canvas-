@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <script src="http://code.jquery.com/jquery-1.8.3.min.js"></script>
+    <title></title>
+    <style type="text/css">
+        *{margin: 0;padding:0;}
+        body{background-color: #000000;margin: 0;}
+        canvas {display: block;position: absolute;top:-15px;}
+        .wrap {
+            opacity: 0.9;
+            width: 200px;
+            margin:200px auto;
+            -webkit-perspective: 800px;
+            -webkit-perspective-origin:50% 100px;
+        }
+        .cube {
+            position: relative;
+            left:20px;
+            width: 200px;
+            height:200px;
+            -webkit-transform-style: preserve-3d;
+            -webkit-transition:-webkit-transform 20s;
+            -webkit-transform: rotateX(30deg);
+        }
+        .cube div {
+            font-size: 26px;
+            box-sizing: border-box;
+            font-family: "trebuchet MS", arial, sans-serif;
+            padding:15px 10px;
+            color:#fff;text-shadow:0 0 5px #fff, 0 0 10px #fff, 0 0 15px #fff, 0 0 20px #ff00de, 0 0 30px #ff00de;
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            opacity: 1;
+            border:1px solid #ccc;
+            border-left:2px solid #000000;
+            -webkit-transition:-webkit-transform 3s;
+            -webkit-transform-origin: left;
+            box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.1), 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+        #page1 {background-color: pink;text-align: center;}
+        #page2 {background-color: khaki;}
+        #page3 {background-color: lightblue;}
+        #page4 {background-color: violet;}
+        #page5 {background-color:lightskyblue;}
+        #page6 {background-color:hotpink;}
+        @-webkit-keyframes spiny {
+            0% {  -webkit-transform: rotateY(0) rotateX(0); }
+            50% {  -webkit-transform: rotateY(360deg) rotateX(0deg); }
+            100% {  -webkit-transform: rotateY(360deg) rotateX(360deg); }
+        }
+        #footer{font-size: 10px;color: rgba(255,255,255,0.2);text-align: center;margin-bottom: 2px;}
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+    window.requestAnimFrame = ( function() {
+        return window.requestAnimationFrame ||
+                window.webkitRequestAnimationFrame ||
+                window.mozRequestAnimationFrame ||
+                function( callback ) {
+                    window.setTimeout( callback, 1000 / 60 );
+                };
+    })();
+    var canvas = document.getElementById( 'canvas' ),ctx = canvas.getContext( '2d' ),cw = window.innerWidth,ch = window.innerHeight,fireworks = [],particles = [],hue = 120,limiterTotal = 5,limiterTick = 0,timerTotal = 30,timerTick = 0,mousedown = false,mx,my;
+    canvas.width = cw;
+    canvas.height = ch;
+    function random( min, max ) {
+        return Math.random() * ( max - min ) + min;
+    }
+    function calculateDistance( p1x, p1y, p2x, p2y ) {
+        var xDistance = p1x - p2x,
+                yDistance = p1y - p2y;
+        return Math.sqrt( Math.pow( xDistance, 2 ) + Math.pow( yDistance, 2 ) );
+    }
+
+    function Firework( sx, sy, tx, ty ) {
+        this.x = sx;
+        this.y = sy;
+        this.sx = sx;
+        this.sy = sy;
+        this.tx = tx;
+        this.ty = ty;
+        this.distanceToTarget = calculateDistance( sx, sy, tx, ty );
+        this.distanceTraveled = 0;
+        this.coordinates = [];
+        this.coordinateCount = 3;
+        while( this.coordinateCount-- ) {
+            this.coordinates.push( [ this.x, this.y ] );
+        }
+        this.angle = Math.atan2( ty - sy, tx - sx );
+        this.speed = 2;
+        this.acceleration = 1.05;
+        this.brightness = random( 50, 70 );
+        this.targetRadius = 1;
+    }
+    Firework.prototype.update = function( index ) {
+        this.coordinates.pop();
+        this.coordinates.unshift( [ this.x, this.y ] );
+        if( this.targetRadius < 8 ) {
+            this.targetRadius += 0.3;
+        } else {
+            this.targetRadius = 1;
+        }
+        this.speed *= this.acceleration;
+        var vx = Math.cos( this.angle ) * this.speed,
+                vy = Math.sin( this.angle ) * this.speed;
+        this.distanceTraveled = calculateDistance( this.sx, this.sy, this.x + vx, this.y + vy );
+        if( this.distanceTraveled >= this.distanceToTarget ) {
+            createParticles( this.tx, this.ty );
+            fireworks.splice( index, 1 );
+        } else {
+            this.x += vx;
+            this.y += vy;
+        }
+    }
+    Firework.prototype.draw = function() {
+        ctx.beginPath();
+        ctx.moveTo( this.coordinates[ this.coordinates.length - 1][ 0 ], this.coordinates[ this.coordinates.length - 1][ 1 ] );
+        ctx.lineTo( this.x, this.y );
+        ctx.strokeStyle = 'hsl(' + hue + ', 100%, ' + this.brightness + '%)';
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc( this.tx, this.ty, this.targetRadius, 0, Math.PI * 2 );
+        ctx.stroke();
+    }
+    function Particle( x, y ) {
+        this.x = x;
+        this.y = y;
+        this.coordinates = [];
+        this.coordinateCount = 5;
+        while( this.coordinateCount-- ) {
+            this.coordinates.push( [ this.x, this.y ] );
+        }
+        this.angle = random( 0, Math.PI * 2 );
+        this.speed = random( 1, 10 );
+        this.friction = 0.95;
+        this.gravity = 1;
+        this.hue = random( hue - 50, hue + 50 );
+        this.brightness = random( 50, 80 );
+        this.alpha = 1;
+        this.decay = random( 0.015, 0.03 );
+    }
+    Particle.prototype.update = function( index ) {
+        this.coordinates.pop();
+        this.coordinates.unshift( [ this.x, this.y ] );
+        this.speed *= this.friction;
+        this.x += Math.cos( this.angle ) * this.speed;
+        this.y += Math.sin( this.angle ) * this.speed + this.gravity;
+        this.alpha -= this.decay;
+        if( this.alpha <= this.decay ) {
+            particles.splice( index, 1 );
+        }
+    }
+    Particle.prototype.draw = function() {
+        ctx. beginPath();
+        ctx.moveTo( this.coordinates[ this.coordinates.length - 1 ][ 0 ], this.coordinates[ this.coordinates.length - 1 ][ 1 ] );
+        ctx.lineTo( this.x, this.y );
+        ctx.strokeStyle = 'hsla(' + this.hue + ', 100%, ' + this.brightness + '%, ' + this.alpha + ')';
+        ctx.stroke();
+    }
+    function createParticles( x, y ) {
+        var particleCount = 30;
+        while( particleCount-- ) {
+            particles.push( new Particle( x, y ) );
+        }
+    }
+    function loop() {
+        requestAnimFrame( loop );
+        hue= random(0, 360 );
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect( 0, 0, cw, ch );
+        ctx.globalCompositeOperation = 'lighter';
+        var i = fireworks.length;
+        while( i-- ) {
+            fireworks[ i ].draw();
+            fireworks[ i ].update( i );
+        }
+        var i = particles.length;
+        while( i-- ) {
+            particles[ i ].draw();
+            particles[ i ].update( i );
+        }
+        if( timerTick >= timerTotal ) {
+            if( !mousedown ) {
+                fireworks.push( new Firework( cw / 2, ch, random( 0, cw ), random( 0, ch / 2 ) ) );
+                timerTick = 0;
+            }
+        } else {
+            timerTick++;
+        }
+        if( limiterTick >= limiterTotal ) {
+            if( mousedown ) {
+                fireworks.push( new Firework( cw / 2, ch, mx, my ) );
+                limiterTick = 0;
+            }
+        } else {
+            limiterTick++;
+        }
+    }
+    canvas.addEventListener( 'mousemove', function( e ) {
+        mx = e.pageX - canvas.offsetLeft;
+        my = e.pageY - canvas.offsetTop;
+    });
+    canvas.addEventListener( 'mousedown', function( e ) {
+        e.preventDefault();
+        mousedown = true;
+    });
+    canvas.addEventListener( 'mouseup', function( e ) {
+        e.preventDefault();
+        mousedown = false;
+    });
+    window.onload = loop;
+    </script>
+    <div class="wrap">
+        <script>
+            var allpages=6;//总共的页数
+            var curpage=1;//当前所处的页数
+            var endDeg=110;//每页翻到的终止位置的度数
+            var pwords=["","烟花绽放的是灿烂的希望，星光闪烁的是幸福的光芒",
+			"在羊年来临之际，祝您新的一年，新的开始，新的气象！",
+			"马上努力，收获羊年的成功；马上加油，收获羊年的财富",
+			"马上幸福，收获羊年的快乐；马上恋爱，收获羊年的甜蜜",
+			"愿你在马年里加油鼓劲，收获羊年的辉煌！！！"];//定义打字数组
+            var nextPage=function(dt){
+                var curId=$(dt).attr("id");
+                if (curId.slice(curId.length-1,curId.length)!=curpage){return;}
+                var curdeg=endDeg-(curpage-1)*1;
+                $("#page"+curpage).css("webkitTransform","rotateY(-"+curdeg+"deg)");
+                curpage++;
+                if (curpage>allpages){
+                    setTimeout("createCube()",3500);
+                }else{//在下一页中打字
+                    setTimeout("showWordsInCPs()",3000);
+                }
+            }
+            function showWordsInCPs(){//把当前页中的汉字显示出来
+                typeWords(pwords[curpage-1],"page"+curpage,200);
+            }
+            function closePg(){
+                $("#page"+curpage).css("webkitTransform","rotateY(0)");curpage--;
+                if (curpage>=1){setTimeout("closePg()",400);}
+                else{setTimeout("creatcb()",1500);}
+            }
+            var createCube=function(){//开始拼合立方体
+                //合上书页
+                $(".cube div").css("webkitTransition","-webkit-transform 1.5s");
+                curpage--;closePg();
+            }
+            var creatcb =function(){//将书方正
+                $(".cube").css({webkitTransition:"-webkit-transform 3s",webkitTransform:"rotateX(0) "});
+                $("#page4").html('');$("#page4").css({background:"url(sty_a5.jpg)",backgroundSize:"100% 100%"});
+				$("#page3").html('');$("#page3").css({background:"url(styb_a5.jpg)",backgroundSize:"100% 100%"});
+                setTimeout("rotateCb()",3000);
+            }
+            function rotateCb(){
+                $(".cube div").css({webkitTransition:"all 5s",opacity:0.8,borderLeft:"1px solid #aaa"});
+                $(".cube").css({webkitTransition:"all 5s",webkitTransform:"rotateY(20deg) rotateX(20deg)"});
+                $("#page1").css("webkitTransformOrigin","top right");
+                $("#page2").css("webkitTransformOrigin","center left");
+                $("#page3").css("webkitTransformOrigin","bottom center");
+                $("#page4").css("webkitTransformOrigin","top center");
+                $("#page5").css("webkitTransformOrigin","top center");
+                $("#page5").css("webkitTransform","translateZ(-100px) rotateY(180deg)");
+                $("#page1").css("webkitTransform","rotateY(-270deg) translateX(100px)");
+                $("#page2").css("webkitTransform","rotateY(270deg) translateX(-100px)");
+                $("#page4").css("webkitTransform","rotateX(90deg) translateY(-100px)");
+                $("#page3").css("webkitTransform","rotateX(-90deg) translateY(100px)");
+                $("#page6").css("webkitTransform","translateZ(100px)");
+                $(".cube").css("webkitAnimation","spiny 30s infinite linear");
+            }
+            $(function(){//设置初始状态
+                for (var i=1; i<=allpages; i++){
+                    $("#page"+i).css("webkitTransform","rotateY(-"+(allpages-i)+"deg)");
+                }
+            });
+        </script>
+        <script type="text/javascript">
+            ///////////////////////////////////////////////////打字机效果模块,调用typeWord函数可以直接使用
+            var index,words ,delay,aimId;
+            function typeWords(str,pla,spe){//打字函数,指明要打的字符串，目标元素，和速度（间隔，毫秒表示）
+                words=str;aimId=pla;delay=spe;
+                index=1;
+                Show();
+            }
+            function Show(){
+                if(index!=words.length){
+                    setTimeout("Show()",delay);
+                }
+                document.getElementById(aimId).innerHTML=words.substr(0,index++);
+            }
+            ////////////////////////////////////////////////////////
+        </script>
+        <div class="cube">
+            <div id="page6" onclick="nextPage(this)"></div>
+            <div id="page5" onclick="nextPage(this)"></div>
+            <div id="page4" onclick="nextPage(this)"></div>
+            <div id="page3" onclick="nextPage(this)"></div>
+            <div id="page2" onclick="nextPage(this)"></div>
+            <div id="page1" onclick="nextPage(this)"><br/>新春快乐</div>
+        </div>
+    </div>
+<p id="footer">懂你网技术组提供 2015.2.10</p>
+</body>
+</html>
